@@ -16,7 +16,7 @@
         </div>
         <div class="controls" aria-label="Camera controls">
           <button id="startButton" class="primary">Start</button>
-          <button id="stopButton" class="danger" disabled>Stop camera</button>
+          <button id="stopButton" class="danger" aria-label="Stop camera" disabled>Stop</button>
           <button id="captureButton" disabled>Capture</button>
         </div>
       </header>
@@ -28,7 +28,7 @@
           <span>🙂</span>
           <strong>Camera is off</strong>
         </div>
-        <div id="emojiOverlay" class="emoji-overlay" aria-hidden="true">😐</div>
+        <div id="overlayLayer" class="overlay-layer is-hidden" aria-hidden="true"></div>
         <div id="status" class="status">Ready when you are.</div>
       </div>
 

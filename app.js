@@ -15,7 +15,7 @@ const emojiMap = {
 
 const video = document.querySelector('#video');
 const stage = document.querySelector('#stage');
-const overlay = document.querySelector('#emojiOverlay');
+const overlayLayer = document.querySelector('#overlayLayer');
 const statusText = document.querySelector('#status');
 const cameraPlaceholder = document.querySelector('#cameraPlaceholder');
 const startButton = document.querySelector('#startButton');
@@ -43,7 +43,7 @@ let lastRecordedKey = '';
 let stableKey = 'neutral';
 let stableCount = 0;
 let stream = null;
-let lastDetectionBox = null;
+let lastDetectedFaces = [];
 const history = [];
 const messageEmojis = [];
 
@@ -56,13 +56,12 @@ function showToast(message) {
 
 function setStatus(message, isWaiting = false) {
   statusText.textContent = message;
-  overlay.classList.toggle('is-hidden', isWaiting);
+  overlayLayer.classList.toggle('is-hidden', isWaiting);
 }
 
 function setActiveEmoji(key, shouldRecord = true, shouldAddToMessage = false) {
   const data = emojiMap[key] || emojiMap.neutral;
   activeKey = key in emojiMap ? key : 'neutral';
-  overlay.textContent = data.emoji;
   currentEmoji.textContent = data.emoji;
   currentLabel.textContent = data.label;
   currentHint.textContent = data.hint;
@@ -215,6 +214,8 @@ function stopCamera() {
   video.srcObject = null;
   video.classList.remove('is-on');
   cameraPlaceholder.classList.remove('is-hidden');
+  renderFaceOverlays([]);
+  lastDetectedFaces = [];
   cameraReady = false;
   startButton.disabled = false;
   stopButton.disabled = true;
@@ -308,19 +309,26 @@ function stabilizeKey(nextKey) {
   return stableCount >= 2 ? stableKey : activeKey;
 }
 
-function positionOverlay(box) {
+function boxToStagePosition(box) {
   const videoRect = video.getBoundingClientRect();
   const stageRect = stage.getBoundingClientRect();
   const metrics = videoCoverMetrics(videoRect.width, videoRect.height);
   const centerX = videoRect.left - stageRect.left + metrics.offsetX + metrics.renderedWidth - ((box.x + box.width / 2) * metrics.scaleX);
   const centerY = videoRect.top - stageRect.top + metrics.offsetY + ((box.y + box.height / 2) * metrics.scaleY);
   const size = Math.max(96, Math.min(260, Math.max(box.width * metrics.scaleX, box.height * metrics.scaleY) * 1.25));
+  return { centerX, centerY, size };
+}
 
-  overlay.style.left = `${centerX}px`;
-  overlay.style.top = `${centerY}px`;
-  overlay.style.width = `${size}px`;
-  overlay.style.height = `${size}px`;
-  overlay.style.fontSize = `${size * 0.72}px`;
+function renderFaceOverlays(faces) {
+  overlayLayer.innerHTML = faces.map(({ box, key }, index) => {
+    const { centerX, centerY, size } = boxToStagePosition(box);
+    const data = emojiMap[key] || emojiMap.neutral;
+    return `
+      <div class="emoji-overlay" style="left:${centerX}px;top:${centerY}px;width:${size}px;height:${size}px;font-size:${size * 0.72}px" aria-label="Face ${index + 1}: ${data.label}">
+        ${data.emoji}
+      </div>
+    `;
+  }).join('');
 }
 
 function startDetectionLoop() {
@@ -328,20 +336,26 @@ function startDetectionLoop() {
   detectTimer = window.setInterval(async () => {
     if (!cameraReady || video.paused || video.videoWidth === 0) return;
 
-    const result = await faceapi
-      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
+    const results = await faceapi
+      .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
       .withFaceExpressions();
 
-    if (!result) {
+    if (!results.length) {
+      renderFaceOverlays([]);
+      lastDetectedFaces = [];
       setStatus('Looking for a face...', true);
       return;
     }
 
-    positionOverlay(result.detection.box);
-    lastDetectionBox = result.detection.box;
-    const key = stabilizeKey(expressionToEmoji(result.expressions));
-    setActiveEmoji(key, true);
-    setStatus(`${emojiMap[key].label} detected`, false);
+    const faces = results
+      .slice(0, 6)
+      .map((result) => ({ box: result.detection.box, key: expressionToEmoji(result.expressions) }));
+    const primaryKey = stabilizeKey(faces[0].key);
+    faces[0].key = primaryKey;
+    renderFaceOverlays(faces);
+    lastDetectedFaces = faces;
+    setActiveEmoji(primaryKey, true);
+    setStatus(`${faces.length} ${faces.length === 1 ? 'face' : 'faces'} detected`, false);
   }, 220);
 }
 
@@ -364,19 +378,18 @@ function captureImage() {
   context.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
   context.restore();
 
-  const box = lastDetectionBox;
-  const centerX = box ? ((box.x + box.width / 2 - crop.sx) / crop.sw) * canvas.width : canvas.width / 2;
-  const centerY = box ? ((box.y + box.height / 2 - crop.sy) / crop.sh) * canvas.height : canvas.height / 2;
-  const emojiSize = box
-    ? Math.max(90, Math.min(260, Math.max((box.width / crop.sw) * canvas.width, (box.height / crop.sh) * canvas.height) * 0.9))
-    : Math.max(90, Math.round(canvas.width * 0.18));
-  const x = canvas.width - centerX;
-  const y = centerY;
-
-  context.font = `${emojiSize}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.fillText(emojiMap[activeKey].emoji, x, y);
+  const faces = lastDetectedFaces.length ? lastDetectedFaces : [{ box: null, key: activeKey }];
+  faces.forEach(({ box, key }) => {
+    const centerX = box ? ((box.x + box.width / 2 - crop.sx) / crop.sw) * canvas.width : canvas.width / 2;
+    const centerY = box ? ((box.y + box.height / 2 - crop.sy) / crop.sh) * canvas.height : canvas.height / 2;
+    const emojiSize = box
+      ? Math.max(90, Math.min(260, Math.max((box.width / crop.sw) * canvas.width, (box.height / crop.sh) * canvas.height) * 0.9))
+      : Math.max(90, Math.round(canvas.width * 0.18));
+    context.font = `${emojiSize}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+    context.fillText(emojiMap[key].emoji, canvas.width - centerX, centerY);
+  });
 
   const link = document.createElement('a');
   link.download = `emoji-camera-${Date.now()}.png`;

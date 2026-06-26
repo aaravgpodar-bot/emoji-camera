@@ -101,10 +101,16 @@ button:disabled {
 }
 
 .topbar {
-  align-items: end;
+  align-items: flex-end;
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   justify-content: space-between;
+}
+
+.topbar > div:first-child {
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 h1,
@@ -139,6 +145,19 @@ h2 {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.controls {
+  flex: 1 1 280px;
+  max-width: 420px;
+  min-width: min(100%, 260px);
+}
+
+.controls button {
+  flex: 1 1 112px;
+  height: 42px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .stage {
@@ -185,6 +204,18 @@ video.is-on {
   display: none;
 }
 
+.overlay-layer {
+  inset: 0;
+  opacity: 1;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 150ms ease;
+}
+
+.overlay-layer.is-hidden {
+  opacity: 0;
+}
+
 .emoji-overlay {
   align-items: center;
   display: flex;
@@ -200,10 +231,6 @@ video.is-on {
   transform: translate(-50%, -50%);
   transition: left 90ms linear, top 90ms linear, width 90ms linear, height 90ms linear, opacity 150ms ease;
   width: 150px;
-}
-
-.emoji-overlay.is-hidden {
-  opacity: 0.18;
 }
 
 .status {
@@ -407,14 +434,23 @@ video.is-on {
     flex-direction: column;
   }
 
+  .topbar > div:first-child,
+  .controls {
+    flex: 0 1 auto;
+  }
+
   .controls,
   .composer-actions {
     justify-content: stretch;
   }
 
+  .controls {
+    max-width: none;
+  }
+
   .controls button,
   .composer-actions button {
-    flex: 1 1 130px;
+    flex: 1 1 96px;
   }
 
   .stage {
