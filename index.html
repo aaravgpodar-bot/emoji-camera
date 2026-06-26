@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emoji Camera</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="camera-panel" aria-label="Emoji camera">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Private browser camera</p>
+          <h1>Emoji Camera</h1>
+        </div>
+        <div class="controls" aria-label="Camera controls">
+          <button id="startButton" class="primary">Start</button>
+          <button id="stopButton" disabled>Camera off</button>
+          <button id="captureButton" disabled>Capture</button>
+        </div>
+      </header>
+
+      <div class="stage" id="stage">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="snapshotCanvas" hidden></canvas>
+        <div id="cameraPlaceholder" class="camera-placeholder">
+          <span>🙂</span>
+          <strong>Camera is off</strong>
+        </div>
+        <div id="emojiOverlay" class="emoji-overlay" aria-hidden="true">😐</div>
+        <div id="status" class="status">Ready when you are.</div>
+      </div>
+
+      <div class="manual-strip" aria-label="Manual emoji testing">
+        <span>Tap to add</span>
+        <button data-manual="happy" title="Happy">😄</button>
+        <button data-manual="laughing" title="Laughing">😂</button>
+        <button data-manual="surprised" title="Surprised">😮</button>
+        <button data-manual="shocked" title="Shocked">😱</button>
+        <button data-manual="sad" title="Sad">😢</button>
+        <button data-manual="angry" title="Angry">😠</button>
+        <button data-manual="neutral" title="Neutral">😐</button>
+        <button data-manual="thinking" title="Thinking">🤔</button>
+        <button data-manual="sleepy" title="Sleepy">😴</button>
+        <button data-manual="cool" title="Cool">😎</button>
+      </div>
+    </section>
+
+    <aside class="side-panel" aria-label="Emoji tools">
+      <section class="current-card">
+        <div>
+          <p class="eyebrow">Current</p>
+          <h2 id="currentLabel">Neutral</h2>
+          <p id="currentHint">Relax your face or start the camera.</p>
+        </div>
+        <div class="current-emoji" id="currentEmoji">😐</div>
+      </section>
+
+      <section class="composer-section">
+        <div class="section-title">
+          <h2>Message</h2>
+          <button id="copyMessageButton" class="primary small">Copy all</button>
+        </div>
+        <div id="messagePreview" class="message-preview" aria-live="polite">Build your emoji message here.</div>
+        <div class="composer-actions">
+          <button id="addCurrentButton">Add current</button>
+          <button id="backspaceMessageButton">Backspace</button>
+          <button id="clearMessageButton">Clear</button>
+        </div>
+      </section>
+
+      <section class="history-section">
+        <div class="section-title">
+          <h2>Recognized</h2>
+          <button id="clearHistoryButton" class="ghost small">Clear</button>
+        </div>
+        <div id="historyList" class="history-list" aria-live="polite">
+          <p class="empty">No emojis recognized yet.</p>
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <h2>Expression Guide</h2>
+        <div id="guideList" class="guide-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
+  <script defer src="app.js"></script>
+</body>
+</html>
