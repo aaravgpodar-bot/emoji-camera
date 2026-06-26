@@ -1,4 +1,4 @@
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+const MODEL_URL = './models';
 
 const emojiMap = {
   happy: { emoji: '😄', label: 'Happy', hint: 'Smile naturally.' },
@@ -43,6 +43,7 @@ let lastRecordedKey = '';
 let stableKey = 'neutral';
 let stableCount = 0;
 let stream = null;
+let lastDetectionBox = null;
 const history = [];
 const messageEmojis = [];
 
@@ -152,8 +153,7 @@ async function copyText(text) {
 async function loadDetector() {
   if (detectorReady) return true;
   if (!window.faceapi) {
-    setStatus('Face detector script did not load. Manual buttons still work.', true);
-    return false;
+    throw new Error('Face detector script did not load. Check the local vendor files.');
   }
 
   setStatus('Loading face detector...', true);
@@ -166,10 +166,19 @@ async function loadDetector() {
 }
 
 async function startCamera() {
+  startButton.disabled = true;
+  setStatus('Loading face detector...', true);
+
   try {
-    startButton.disabled = true;
-    setStatus('Requesting camera...', true);
     await loadDetector();
+  } catch (error) {
+    console.error(error);
+    detectorReady = false;
+    setStatus('Face detector files could not load. Check your connection or local model files; manual buttons still work.', true);
+  }
+
+  try {
+    setStatus('Requesting camera...', true);
 
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -214,6 +223,57 @@ function stopCamera() {
   setStatus('Camera is off.', true);
 }
 
+function videoCoverMetrics(targetWidth = video.clientWidth, targetHeight = video.clientHeight) {
+  const sourceWidth = video.videoWidth || targetWidth || 1;
+  const sourceHeight = video.videoHeight || targetHeight || 1;
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+  let renderedWidth = targetWidth;
+  let renderedHeight = targetHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (targetRatio > sourceRatio) {
+    renderedHeight = targetWidth / sourceRatio;
+    offsetY = (targetHeight - renderedHeight) / 2;
+  } else {
+    renderedWidth = targetHeight * sourceRatio;
+    offsetX = (targetWidth - renderedWidth) / 2;
+  }
+
+  return {
+    sourceWidth,
+    sourceHeight,
+    renderedWidth,
+    renderedHeight,
+    offsetX,
+    offsetY,
+    scaleX: renderedWidth / sourceWidth,
+    scaleY: renderedHeight / sourceHeight,
+  };
+}
+
+function videoSourceCrop(targetWidth, targetHeight) {
+  const sourceWidth = video.videoWidth || 1;
+  const sourceHeight = video.videoHeight || 1;
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+  let sx = 0;
+  let sy = 0;
+  let sw = sourceWidth;
+  let sh = sourceHeight;
+
+  if (targetRatio > sourceRatio) {
+    sh = sourceWidth / targetRatio;
+    sy = (sourceHeight - sh) / 2;
+  } else {
+    sw = sourceHeight * targetRatio;
+    sx = (sourceWidth - sw) / 2;
+  }
+
+  return { sx, sy, sw, sh };
+}
+
 function expressionToEmoji(expressions) {
   const sorted = Object.entries(expressions).sort((a, b) => b[1] - a[1]);
   const [top, score] = sorted[0] || ['neutral', 0];
@@ -251,11 +311,10 @@ function stabilizeKey(nextKey) {
 function positionOverlay(box) {
   const videoRect = video.getBoundingClientRect();
   const stageRect = stage.getBoundingClientRect();
-  const scaleX = videoRect.width / video.videoWidth;
-  const scaleY = videoRect.height / video.videoHeight;
-  const centerX = videoRect.right - stageRect.left - ((box.x + box.width / 2) * scaleX);
-  const centerY = videoRect.top - stageRect.top + ((box.y + box.height / 2) * scaleY);
-  const size = Math.max(96, Math.min(260, Math.max(box.width * scaleX, box.height * scaleY) * 1.25));
+  const metrics = videoCoverMetrics(videoRect.width, videoRect.height);
+  const centerX = videoRect.left - stageRect.left + metrics.offsetX + metrics.renderedWidth - ((box.x + box.width / 2) * metrics.scaleX);
+  const centerY = videoRect.top - stageRect.top + metrics.offsetY + ((box.y + box.height / 2) * metrics.scaleY);
+  const size = Math.max(96, Math.min(260, Math.max(box.width * metrics.scaleX, box.height * metrics.scaleY) * 1.25));
 
   overlay.style.left = `${centerX}px`;
   overlay.style.top = `${centerY}px`;
@@ -279,6 +338,7 @@ function startDetectionLoop() {
     }
 
     positionOverlay(result.detection.box);
+    lastDetectionBox = result.detection.box;
     const key = stabilizeKey(expressionToEmoji(result.expressions));
     setActiveEmoji(key, true);
     setStatus(`${emojiMap[key].label} detected`, false);
@@ -293,20 +353,25 @@ function captureImage() {
 
   const canvas = snapshotCanvas;
   const context = canvas.getContext('2d');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const stageRect = stage.getBoundingClientRect();
+  canvas.width = Math.round(stageRect.width || video.videoWidth);
+  canvas.height = Math.round(stageRect.height || video.videoHeight);
+  const crop = videoSourceCrop(canvas.width, canvas.height);
 
   context.save();
   context.translate(canvas.width, 0);
   context.scale(-1, 1);
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  context.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
   context.restore();
 
-  const overlayRect = overlay.getBoundingClientRect();
-  const stageRect = stage.getBoundingClientRect();
-  const emojiSize = Math.max(90, Math.round((overlayRect.width / stageRect.width) * canvas.width * 0.72));
-  const x = ((overlayRect.left + overlayRect.width / 2 - stageRect.left) / stageRect.width) * canvas.width;
-  const y = ((overlayRect.top + overlayRect.height / 2 - stageRect.top) / stageRect.height) * canvas.height;
+  const box = lastDetectionBox;
+  const centerX = box ? ((box.x + box.width / 2 - crop.sx) / crop.sw) * canvas.width : canvas.width / 2;
+  const centerY = box ? ((box.y + box.height / 2 - crop.sy) / crop.sh) * canvas.height : canvas.height / 2;
+  const emojiSize = box
+    ? Math.max(90, Math.min(260, Math.max((box.width / crop.sw) * canvas.width, (box.height / crop.sh) * canvas.height) * 0.9))
+    : Math.max(90, Math.round(canvas.width * 0.18));
+  const x = canvas.width - centerX;
+  const y = centerY;
 
   context.font = `${emojiSize}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
   context.textAlign = 'center';
