@@ -4,7 +4,7 @@ const MODEL_URLS = [
 ];
 const LEARNING_KEY = 'emoji-camera.expression-learning.v1';
 const EXPRESSION_KEYS = ['happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'neutral'];
-const LEARNABLE_KEYS = ['happy', 'laughing', 'surprised', 'shocked', 'sad', 'angry', 'neutral', 'thinking', 'sleepy', 'cool'];
+const LEARNABLE_KEYS = ['happy', 'laughing', 'surprised', 'shocked', 'sad', 'angry', 'neutral', 'thinking', 'sleepy', 'cool', 'wink', 'kiss', 'grin', 'yawn', 'relaxed', 'smirk'];
 
 const emojiMap = {
   happy: { emoji: '😄', label: 'Happy', hint: 'Smile naturally.' },
@@ -17,6 +17,12 @@ const emojiMap = {
   thinking: { emoji: '🤔', label: 'Thinking', hint: 'Try a puzzled or skeptical face.' },
   sleepy: { emoji: '😴', label: 'Sleepy', hint: 'Try lowered eyelids or a tired face.' },
   cool: { emoji: '😎', label: 'Cool', hint: 'Use the button for a confident pose.' },
+  wink: { emoji: '😉', label: 'Wink', hint: 'Close one eye.' },
+  kiss: { emoji: '😗', label: 'Kiss', hint: 'Pucker your lips.' },
+  grin: { emoji: '😁', label: 'Big grin', hint: 'Smile wide with teeth.' },
+  yawn: { emoji: '🥱', label: 'Yawn', hint: 'Open wide like a yawn.' },
+  relaxed: { emoji: '😌', label: 'Relaxed', hint: 'Gently close both eyes.' },
+  smirk: { emoji: '😏', label: 'Smirk', hint: 'Smile with one corner.' },
 };
 
 const video = document.querySelector('#video');
@@ -46,8 +52,6 @@ const addCurrentButton = document.querySelector('#addCurrentButton');
 const copyMessageButton = document.querySelector('#copyMessageButton');
 const clearMessageButton = document.querySelector('#clearMessageButton');
 const backspaceMessageButton = document.querySelector('#backspaceMessageButton');
-const aiCaptionButton = document.querySelector('#aiCaptionButton');
-const aiCaptionOutput = document.querySelector('#aiCaptionOutput');
 const toast = document.querySelector('#toast');
 
 let detectorReady = false;
@@ -310,6 +314,7 @@ async function loadDetector() {
     try {
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+        faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
         faceapi.nets.faceExpressionNet.loadFromUri(modelUrl),
       ]);
       detectorReady = true;
@@ -476,6 +481,65 @@ function expressionToEmoji(expressions) {
   return learnedEmojiFor(expressions, baseKey);
 }
 
+function pointDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function eyeAspectRatio(eye) {
+  // face-api eye = 6 points. EAR = (|p1-p5| + |p2-p4|) / (2 * |p0-p3|).
+  // Small EAR = closed eye.
+  return (pointDistance(eye[1], eye[5]) + pointDistance(eye[2], eye[4]))
+    / (2 * pointDistance(eye[0], eye[3]) + 1e-6);
+}
+
+// Geometry from the 68-point landmark model. This adds expressions the 7-class
+// expression model cannot see on its own: wink, kiss, big grin, yawn, gently
+// closed eyes, and smirk. Thresholds are tuned for a typical front webcam;
+// nudge them if a state triggers too easily or not enough.
+function landmarkRefine(landmarks, expressions, fallbackKey) {
+  try {
+    const leftEye = landmarks.getLeftEye();
+    const rightEye = landmarks.getRightEye();
+    const mouth = landmarks.getMouth();
+    const jaw = landmarks.getJawOutline();
+    const faceWidth = pointDistance(jaw[0], jaw[jaw.length - 1]) || 1;
+    const leftEAR = eyeAspectRatio(leftEye);
+    const rightEAR = eyeAspectRatio(rightEye);
+    const mouthWidth = pointDistance(mouth[0], mouth[6]);
+    const mouthHeight = pointDistance(mouth[3], mouth[9]);
+    const mouthOpen = mouthHeight / (mouthWidth + 1e-6);   // mouth aspect ratio
+    const mouthSpread = mouthWidth / faceWidth;            // smile / pucker width
+    const cornerTilt = Math.abs(mouth[0].y - mouth[6].y) / faceWidth;
+    const happy = expressions.happy || 0;
+    const surprised = expressions.surprised || 0;
+
+    const bothEyesClosed = leftEAR < 0.18 && rightEAR < 0.18;
+    const oneEyeClosed = Math.min(leftEAR, rightEAR) < 0.16 && Math.max(leftEAR, rightEAR) > 0.24;
+
+    if (oneEyeClosed && mouthOpen < 0.55) return 'wink';
+    if (bothEyesClosed) return mouthOpen > 0.6 ? 'yawn' : 'relaxed';
+    if (mouthOpen > 0.6) {
+      if (happy > 0.5) return 'laughing';
+      if (fallbackKey === 'shocked' || surprised > 0.3) return 'shocked';
+      return 'yawn';
+    }
+    if (happy > 0.3 && mouthSpread > 0.42) return 'grin';
+    if (happy < 0.2 && mouthSpread < 0.30 && mouthOpen > 0.22) return 'kiss';
+    if (cornerTilt > 0.05 && happy > 0.08 && happy < 0.6) return 'smirk';
+    return fallbackKey;
+  } catch (error) {
+    return fallbackKey;
+  }
+}
+
+// Combine the expression model, the landmark geometry, and any learned
+// corrections into one emoji key.
+function classifyFace(expressions, landmarks) {
+  const base = baseExpressionToEmoji(expressions);
+  const refined = landmarks ? landmarkRefine(landmarks, expressions, base) : base;
+  return learnedEmojiFor(expressions, refined);
+}
+
 function detectHandMovement() {
   if (!cameraReady || !motionContext || video.videoWidth === 0) return null;
   const width = 96;
@@ -572,6 +636,7 @@ function startDetectionLoop() {
 
     const results = await faceapi
       .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
+      .withFaceLandmarks()
       .withFaceExpressions();
 
     if (!results.length) {
@@ -591,7 +656,7 @@ function startDetectionLoop() {
       .slice(0, 6)
       .map((result) => ({
         box: result.detection.box,
-        key: expressionToEmoji(result.expressions),
+        key: classifyFace(result.expressions, result.landmarks),
         signature: expressionSignature(result.expressions),
       }));
     const primaryKey = stabilizeKey(faces[0].key);
@@ -713,40 +778,6 @@ clearHistoryButton.addEventListener('click', () => {
   renderHistory();
   showToast('History cleared.');
 });
-
-async function requestMoodCaption() {
-  const key = activeKey || 'neutral';
-  const data = emojiMap[key] || emojiMap.neutral;
-  aiCaptionButton.disabled = true;
-  aiCaptionOutput.textContent = 'Asking the AI for a caption...';
-  aiCaptionOutput.classList.remove('has-caption');
-
-  try {
-    const response = await fetch('/api/mood-caption', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        label: key,
-        emoji: data.emoji,
-        context: cameraReady ? 'detected live from the webcam' : 'picked manually',
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.caption) {
-      throw new Error(payload.error || 'The AI caption request failed.');
-    }
-    aiCaptionOutput.textContent = `${data.emoji} ${payload.caption}`;
-    aiCaptionOutput.classList.add('has-caption');
-    showToast('AI caption ready.');
-  } catch (error) {
-    aiCaptionOutput.textContent = error.message || 'Could not get an AI caption.';
-    showToast('AI caption failed.');
-  } finally {
-    aiCaptionButton.disabled = false;
-  }
-}
-
-aiCaptionButton.addEventListener('click', requestMoodCaption);
 
 window.addEventListener('beforeunload', stopCamera);
 
