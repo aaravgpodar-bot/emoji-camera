@@ -90,13 +90,34 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
-    window.loadFaceApiFallback = function () {
-      var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js';
-      document.head.appendChild(script);
-    };
+    (function loadScripts() {
+      var detectorSources = [
+        'vendor/face-api.js',
+        'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js'
+      ];
+
+      function loadApp() {
+        var app = document.createElement('script');
+        app.src = 'app.js';
+        document.body.appendChild(app);
+      }
+
+      function loadDetector(index) {
+        if (index >= detectorSources.length) {
+          loadApp();
+          return;
+        }
+        var script = document.createElement('script');
+        script.src = detectorSources[index];
+        script.onload = loadApp;
+        script.onerror = function () {
+          loadDetector(index + 1);
+        };
+        document.body.appendChild(script);
+      }
+
+      loadDetector(0);
+    })();
   </script>
-  <script defer src="vendor/face-api.js" onerror="window.loadFaceApiFallback()"></script>
-  <script defer src="app.js"></script>
 </body>
 </html>
