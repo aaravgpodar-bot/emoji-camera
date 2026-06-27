@@ -79,6 +79,41 @@ function saveLearning() {
   localStorage.setItem(LEARNING_KEY, JSON.stringify(learnedSamples.slice(-80)));
 }
 
+async function loadGlobalLearning() {
+  try {
+    const response = await fetch('/api/learning', { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data.samples)) return;
+    const globalSamples = data.samples.filter((item) => item && item.key && Array.isArray(item.signature));
+    learnedSamples = mergeLearningSamples([...learnedSamples, ...globalSamples]).slice(-200);
+    saveLearning();
+  } catch {
+    // Local learning remains available if the global backend is offline.
+  }
+}
+
+function mergeLearningSamples(samples) {
+  const seen = new Set();
+  return samples.filter((sample) => {
+    const marker = `${sample.key}:${(sample.signature || []).join(',')}:${sample.confirmed ? 1 : 0}`;
+    if (seen.has(marker)) return false;
+    seen.add(marker);
+    return true;
+  });
+}
+
+async function saveGlobalLearning(sample) {
+  try {
+    await fetch('/api/learning', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sample),
+    });
+  } catch {
+    // The sample is already saved locally, so the app can still learn offline.
+  }
+}
+
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
@@ -192,14 +227,16 @@ function learnedEmojiFor(expressions, fallbackKey) {
 
 function rememberExpression(signature, key, confirmed = false) {
   if (!signature || !emojiMap[key]) return;
-  learnedSamples.push({
+  const sample = {
     key,
     signature,
     confirmed,
     time: Date.now(),
-  });
+  };
+  learnedSamples.push(sample);
   learnedSamples = learnedSamples.slice(-80);
   saveLearning();
+  saveGlobalLearning(sample);
 }
 
 function showFeedback(key, signature) {
@@ -557,7 +594,7 @@ saveCorrectionButton.addEventListener('click', () => {
   const intendedKey = correctionSelect.value;
   rememberExpression(pendingFeedback.signature, intendedKey, false);
   setActiveEmoji(intendedKey, true, false);
-  showToast(`Saved ${emojiMap[intendedKey].label} for this device`);
+  showToast(`Saved ${emojiMap[intendedKey].label} globally`);
   hideFeedback();
 });
 
@@ -612,3 +649,4 @@ renderGuide();
 renderHistory();
 renderMessage();
 renderCorrectionOptions();
+loadGlobalLearning();
