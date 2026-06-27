@@ -554,3 +554,37 @@ video.is-on {
     width: 100%;
   }
 }
+
+.ai-caption-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+}
+
+.ai-caption-output {
+  align-items: center;
+  background: #101319;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  min-height: 64px;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  word-break: break-word;
+}
+
+.ai-caption-output.has-caption {
+  background: linear-gradient(135deg, rgba(20, 209, 184, 0.16), rgba(255, 212, 92, 0.12));
+  border-color: var(--accent);
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 600;
+}

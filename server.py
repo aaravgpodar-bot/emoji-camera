@@ -7,6 +7,11 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+try:
+    from openai_helper import generate_mood_caption
+except Exception:  # pragma: no cover - openai may be uninstalled in some setups
+    generate_mood_caption = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("EMOJI_CAMERA_DATA_DIR", BASE_DIR / "data"))
@@ -26,6 +31,31 @@ def index():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/mood-caption")
+def mood_caption():
+    """AI feature: turn the currently detected expression into a fun caption."""
+    if generate_mood_caption is None:
+        return jsonify({"error": "AI helper unavailable. Run: pip install -r requirements.txt"}), 503
+
+    body = request.get_json(silent=True) or {}
+    label = str(body.get("label", "")).strip()
+    emoji = str(body.get("emoji", "")).strip()
+    context = str(body.get("context", "")).strip()
+    if not label:
+        return jsonify({"error": "Missing detected expression label."}), 400
+    if label not in LEARNABLE_KEYS:
+        return jsonify({"error": "Unknown expression label."}), 400
+
+    try:
+        caption = generate_mood_caption(label, emoji=emoji, context=context)
+    except Exception as error:  # surface a clean message to the UI
+        return jsonify({"error": f"AI caption failed: {error}"}), 502
+
+    if not caption:
+        return jsonify({"error": "AI returned an empty caption."}), 502
+    return jsonify({"caption": caption, "label": label})
 
 
 @app.get("/api/learning")
@@ -120,4 +150,5 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8095, debug=True)
+    port = int(os.environ.get("PORT", 5187))
+    app.run(host="127.0.0.1", port=port, debug=True)

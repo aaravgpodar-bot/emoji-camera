@@ -46,6 +46,8 @@ const addCurrentButton = document.querySelector('#addCurrentButton');
 const copyMessageButton = document.querySelector('#copyMessageButton');
 const clearMessageButton = document.querySelector('#clearMessageButton');
 const backspaceMessageButton = document.querySelector('#backspaceMessageButton');
+const aiCaptionButton = document.querySelector('#aiCaptionButton');
+const aiCaptionOutput = document.querySelector('#aiCaptionOutput');
 const toast = document.querySelector('#toast');
 
 let detectorReady = false;
@@ -711,6 +713,40 @@ clearHistoryButton.addEventListener('click', () => {
   renderHistory();
   showToast('History cleared.');
 });
+
+async function requestMoodCaption() {
+  const key = activeKey || 'neutral';
+  const data = emojiMap[key] || emojiMap.neutral;
+  aiCaptionButton.disabled = true;
+  aiCaptionOutput.textContent = 'Asking the AI for a caption...';
+  aiCaptionOutput.classList.remove('has-caption');
+
+  try {
+    const response = await fetch('/api/mood-caption', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: key,
+        emoji: data.emoji,
+        context: cameraReady ? 'detected live from the webcam' : 'picked manually',
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.caption) {
+      throw new Error(payload.error || 'The AI caption request failed.');
+    }
+    aiCaptionOutput.textContent = `${data.emoji} ${payload.caption}`;
+    aiCaptionOutput.classList.add('has-caption');
+    showToast('AI caption ready.');
+  } catch (error) {
+    aiCaptionOutput.textContent = error.message || 'Could not get an AI caption.';
+    showToast('AI caption failed.');
+  } finally {
+    aiCaptionButton.disabled = false;
+  }
+}
+
+aiCaptionButton.addEventListener('click', requestMoodCaption);
 
 window.addEventListener('beforeunload', stopCamera);
 
