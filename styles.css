@@ -276,6 +276,7 @@ video.is-on {
 }
 
 .current-card,
+.feedback-card,
 .composer-section,
 .history-section,
 .guide-section {
@@ -295,7 +296,41 @@ video.is-on {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.feedback-card {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-card.is-hidden,
+.correction-form.is-hidden {
+  display: none;
+}
+
+.feedback-actions,
+.correction-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.correction-form label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.correction-form select {
+  background: #101319;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
 .current-card p,
+.feedback-card p,
 .empty,
 .item-subtitle {
   color: var(--muted);

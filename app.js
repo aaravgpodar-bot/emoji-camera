@@ -2,6 +2,9 @@ const MODEL_URLS = [
   './models',
   'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',
 ];
+const LEARNING_KEY = 'emoji-camera.expression-learning.v1';
+const EXPRESSION_KEYS = ['happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'neutral'];
+const LEARNABLE_KEYS = ['happy', 'laughing', 'surprised', 'shocked', 'sad', 'angry', 'neutral', 'thinking', 'sleepy', 'cool'];
 
 const emojiMap = {
   happy: { emoji: '😄', label: 'Happy', hint: 'Smile naturally.' },
@@ -28,6 +31,14 @@ const snapshotCanvas = document.querySelector('#snapshotCanvas');
 const currentEmoji = document.querySelector('#currentEmoji');
 const currentLabel = document.querySelector('#currentLabel');
 const currentHint = document.querySelector('#currentHint');
+const feedbackCard = document.querySelector('#feedbackCard');
+const feedbackTitle = document.querySelector('#feedbackTitle');
+const feedbackPrompt = document.querySelector('#feedbackPrompt');
+const feedbackYesButton = document.querySelector('#feedbackYesButton');
+const feedbackNoButton = document.querySelector('#feedbackNoButton');
+const correctionForm = document.querySelector('#correctionForm');
+const correctionSelect = document.querySelector('#correctionSelect');
+const saveCorrectionButton = document.querySelector('#saveCorrectionButton');
 const historyList = document.querySelector('#historyList');
 const clearHistoryButton = document.querySelector('#clearHistoryButton');
 const guideList = document.querySelector('#guideList');
@@ -47,8 +58,27 @@ let stableKey = 'neutral';
 let stableCount = 0;
 let stream = null;
 let lastDetectedFaces = [];
+let lastExpressionSignature = null;
+let lastFeedbackKey = '';
+let lastFeedbackTime = 0;
+let lastFeedbackSignature = null;
+let pendingFeedback = null;
+let learnedSamples = loadLearning();
 const history = [];
 const messageEmojis = [];
+
+function loadLearning() {
+  try {
+    const samples = JSON.parse(localStorage.getItem(LEARNING_KEY) || '[]');
+    return Array.isArray(samples) ? samples.filter((item) => item && item.key && Array.isArray(item.signature)).slice(-80) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLearning() {
+  localStorage.setItem(LEARNING_KEY, JSON.stringify(learnedSamples.slice(-80)));
+}
 
 function showToast(message) {
   toast.textContent = message;
@@ -124,6 +154,77 @@ function renderGuide() {
       </div>
     </div>
   `).join('');
+}
+
+function renderCorrectionOptions() {
+  correctionSelect.innerHTML = LEARNABLE_KEYS.map((key) => {
+    const data = emojiMap[key];
+    return `<option value="${key}">${data.emoji} ${data.label}</option>`;
+  }).join('');
+}
+
+function expressionSignature(expressions = {}) {
+  return EXPRESSION_KEYS.map((key) => Math.round((expressions[key] || 0) * 1000) / 1000);
+}
+
+function signatureDistance(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return Number.POSITIVE_INFINITY;
+  const total = a.reduce((sum, value, index) => {
+    const diff = value - b[index];
+    return sum + diff * diff;
+  }, 0);
+  return Math.sqrt(total);
+}
+
+function learnedEmojiFor(expressions, fallbackKey) {
+  const signature = expressionSignature(expressions);
+  let best = null;
+  learnedSamples.forEach((sample) => {
+    const distance = signatureDistance(signature, sample.signature);
+    if (!best || distance < best.distance) best = { ...sample, distance };
+  });
+
+  if (best && best.distance < 0.34) {
+    return best.key;
+  }
+
+  return fallbackKey;
+}
+
+function rememberExpression(signature, key, confirmed = false) {
+  if (!signature || !emojiMap[key]) return;
+  learnedSamples.push({
+    key,
+    signature,
+    confirmed,
+    time: Date.now(),
+  });
+  learnedSamples = learnedSamples.slice(-80);
+  saveLearning();
+}
+
+function showFeedback(key, signature) {
+  if (!signature || !feedbackCard) return;
+  const repeatedSoon = key === lastFeedbackKey
+    && Date.now() - lastFeedbackTime < 9000
+    && signatureDistance(signature, lastFeedbackSignature) < 0.18;
+  if (repeatedSoon || pendingFeedback) return;
+  const data = emojiMap[key] || emojiMap.neutral;
+  pendingFeedback = { key, signature };
+  lastFeedbackKey = key;
+  lastFeedbackTime = Date.now();
+  lastFeedbackSignature = signature;
+  correctionSelect.value = key;
+  feedbackTitle.textContent = `Was that ${data.emoji} ${data.label}?`;
+  feedbackPrompt.textContent = 'If it guessed wrong, choose what you meant and Emoji Camera will remember this expression.';
+  correctionForm.classList.add('is-hidden');
+  feedbackCard.classList.remove('is-hidden');
+}
+
+function hideFeedback() {
+  pendingFeedback = null;
+  correctionForm.classList.add('is-hidden');
+  feedbackCard.classList.add('is-hidden');
 }
 
 function renderMessage() {
@@ -287,7 +388,7 @@ function videoSourceCrop(targetWidth, targetHeight) {
   return { sx, sy, sw, sh };
 }
 
-function expressionToEmoji(expressions) {
+function baseExpressionToEmoji(expressions) {
   const sorted = Object.entries(expressions).sort((a, b) => b[1] - a[1]);
   const [top, score] = sorted[0] || ['neutral', 0];
   const happy = expressions.happy || 0;
@@ -308,20 +409,26 @@ function expressionToEmoji(expressions) {
   ].sort((a, b) => b[1] - a[1]);
   const [bestExpression, bestScore] = expressive[0] || ['neutral', 0];
   const neutralLead = neutral - bestScore;
+  const expressiveTotal = happy + surprised + sad + angry + fearful + disgusted;
 
-  if (happy > 0.6) return 'laughing';
-  if (happy > 0.16 && neutralLead < 0.7) return 'happy';
-  if (surprised > 0.48 || fearful > 0.42) return 'shocked';
-  if ((surprised > 0.13 || fearful > 0.18) && neutralLead < 0.72) return 'surprised';
-  if (angry > 0.13 && neutralLead < 0.72) return 'angry';
-  if (sad > 0.12 && neutralLead < 0.72) return 'sad';
-  if (disgusted > 0.12 && neutralLead < 0.72) return 'thinking';
-  if (bestScore > 0.2 && bestExpression !== 'neutral' && neutralLead < 0.76) {
+  if (happy > 0.54) return 'laughing';
+  if (happy > 0.11 && neutralLead < 0.82) return 'happy';
+  if (surprised > 0.42 || fearful > 0.38) return 'shocked';
+  if ((surprised > 0.09 || fearful > 0.14) && neutralLead < 0.84) return 'surprised';
+  if (angry > 0.09 && neutralLead < 0.84) return 'angry';
+  if (sad > 0.09 && neutralLead < 0.84) return 'sad';
+  if (disgusted > 0.08 && neutralLead < 0.84) return 'thinking';
+  if (bestScore > 0.14 && bestExpression !== 'neutral' && neutralLead < 0.88) {
     return bestExpression === 'fearful' ? 'shocked' : bestExpression === 'disgusted' ? 'thinking' : bestExpression;
   }
-  if (neutral > 0.62 && neutral < 0.86 && bestScore < 0.16) return 'sleepy';
-  if (score < 0.18 || top === 'neutral') return 'neutral';
+  if (neutral > 0.58 && neutral < 0.9 && expressiveTotal > 0.08 && bestScore < 0.13) return 'sleepy';
+  if (score < 0.16 || top === 'neutral') return 'neutral';
   return emojiMap[top] ? top : 'neutral';
+}
+
+function expressionToEmoji(expressions) {
+  const baseKey = baseExpressionToEmoji(expressions);
+  return learnedEmojiFor(expressions, baseKey);
 }
 
 function stabilizeKey(nextKey) {
@@ -373,14 +480,20 @@ function startDetectionLoop() {
       return;
     }
 
-    const faces = results
+  const faces = results
       .slice(0, 6)
-      .map((result) => ({ box: result.detection.box, key: expressionToEmoji(result.expressions) }));
+      .map((result) => ({
+        box: result.detection.box,
+        key: expressionToEmoji(result.expressions),
+        signature: expressionSignature(result.expressions),
+      }));
     const primaryKey = stabilizeKey(faces[0].key);
     faces[0].key = primaryKey;
+    lastExpressionSignature = faces[0].signature;
     renderFaceOverlays(faces);
     lastDetectedFaces = faces;
     setActiveEmoji(primaryKey, true);
+    if (stableCount >= 4) showFeedback(primaryKey, lastExpressionSignature);
     setStatus(`${faces.length} ${faces.length === 1 ? 'face' : 'faces'} detected`, false);
   }, 220);
 }
@@ -427,6 +540,28 @@ function captureImage() {
 startButton.addEventListener('click', startCamera);
 stopButton.addEventListener('click', stopCamera);
 captureButton.addEventListener('click', captureImage);
+
+feedbackYesButton.addEventListener('click', () => {
+  if (!pendingFeedback) return;
+  rememberExpression(pendingFeedback.signature, pendingFeedback.key, true);
+  showToast(`Remembered ${emojiMap[pendingFeedback.key].label}`);
+  hideFeedback();
+});
+
+feedbackNoButton.addEventListener('click', () => {
+  if (!pendingFeedback) return;
+  correctionForm.classList.remove('is-hidden');
+  correctionSelect.focus();
+});
+
+saveCorrectionButton.addEventListener('click', () => {
+  if (!pendingFeedback) return;
+  const intendedKey = correctionSelect.value;
+  rememberExpression(pendingFeedback.signature, intendedKey, false);
+  setActiveEmoji(intendedKey, true, false);
+  showToast(`Learned ${emojiMap[intendedKey].label}`);
+  hideFeedback();
+});
 
 document.querySelectorAll('[data-manual]').forEach((button) => {
   button.addEventListener('click', () => {
@@ -478,3 +613,4 @@ window.addEventListener('beforeunload', stopCamera);
 renderGuide();
 renderHistory();
 renderMessage();
+renderCorrectionOptions();
