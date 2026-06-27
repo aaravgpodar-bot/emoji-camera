@@ -566,6 +566,7 @@ function startDetectionLoop() {
   window.clearInterval(detectTimer);
   detectTimer = window.setInterval(async () => {
     if (!cameraReady || video.paused || video.videoWidth === 0) return;
+    if (pendingFeedback) return;
 
     const results = await faceapi
       .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))

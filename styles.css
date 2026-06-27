@@ -308,6 +308,20 @@ video.is-on {
   padding: 10px 12px;
 }
 
+.camera-feedback {
+  background: rgba(12, 15, 22, 0.92);
+  border-color: rgba(255, 212, 92, 0.5);
+  bottom: 76px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+  left: 50%;
+  max-width: min(560px, calc(100% - 28px));
+  pointer-events: auto;
+  position: absolute;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 8;
+}
+
 .feedback-card.is-hidden,
 .correction-form.is-hidden {
   display: none;

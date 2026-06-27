@@ -29,6 +29,18 @@
           <strong>Camera is off</strong>
         </div>
         <div id="overlayLayer" class="overlay-layer is-hidden" aria-hidden="true"></div>
+        <section id="feedbackCard" class="feedback-card camera-feedback is-hidden" aria-live="polite">
+          <p id="feedbackTitle">Was that emoji right? Changes train everyone.</p>
+          <div class="feedback-actions">
+            <button id="feedbackYesButton" class="primary small">Correct</button>
+            <button id="feedbackNoButton" class="small">Change</button>
+          </div>
+          <div id="correctionForm" class="correction-form is-hidden">
+            <label for="correctionSelect">I meant</label>
+            <select id="correctionSelect"></select>
+            <button id="saveCorrectionButton" class="primary small">Save globally</button>
+          </div>
+        </section>
         <div id="status" class="status">Ready when you are.</div>
       </div>
 
@@ -55,19 +67,6 @@
           <p id="currentHint">Relax your face or start the camera.</p>
         </div>
         <div class="current-emoji" id="currentEmoji">😐</div>
-      </section>
-
-      <section id="feedbackCard" class="feedback-card is-hidden" aria-live="polite">
-        <p id="feedbackTitle">Was that emoji right? Changes train everyone.</p>
-        <div class="feedback-actions">
-          <button id="feedbackYesButton" class="primary small">Correct</button>
-          <button id="feedbackNoButton" class="small">Change</button>
-        </div>
-        <div id="correctionForm" class="correction-form is-hidden">
-          <label for="correctionSelect">I meant</label>
-          <select id="correctionSelect"></select>
-          <button id="saveCorrectionButton" class="primary small">Save globally</button>
-        </div>
       </section>
 
       <section class="composer-section">
