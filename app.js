@@ -1,4 +1,7 @@
-const MODEL_URL = './models';
+const MODEL_URLS = [
+  './models',
+  'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model',
+];
 
 const emojiMap = {
   happy: { emoji: '😄', label: 'Happy', hint: 'Smile naturally.' },
@@ -156,12 +159,21 @@ async function loadDetector() {
   }
 
   setStatus('Loading face detector...', true);
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-  ]);
-  detectorReady = true;
-  return true;
+  let lastError = null;
+  for (const modelUrl of MODEL_URLS) {
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+        faceapi.nets.faceExpressionNet.loadFromUri(modelUrl),
+      ]);
+      detectorReady = true;
+      return true;
+    } catch (error) {
+      lastError = error;
+      console.warn(`Could not load face detector models from ${modelUrl}`, error);
+    }
+  }
+  throw lastError || new Error('Face detector models did not load.');
 }
 
 async function startCamera() {
