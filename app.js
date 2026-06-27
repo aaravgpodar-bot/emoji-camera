@@ -158,7 +158,6 @@ function setDetectedEmoji(key, signature) {
 function addHistory(key) {
   history.unshift({
     key,
-    time: new Date(),
   });
 
   if (history.length > 18) {
@@ -180,7 +179,6 @@ function renderHistory() {
         <div class="item-emoji">${data.emoji}</div>
         <div>
           <div class="item-title">${data.label}</div>
-          <div class="item-subtitle">${entry.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
         </div>
         <button class="item-copy" data-copy-index="${index}" aria-label="Copy ${data.label} emoji">Copy</button>
       </div>
