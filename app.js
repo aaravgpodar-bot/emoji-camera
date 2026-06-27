@@ -63,6 +63,11 @@ let lastFeedbackTime = 0;
 let lastFeedbackSignature = null;
 let pendingFeedback = null;
 let learnedSamples = loadLearning();
+let motionCanvas = document.createElement('canvas');
+let motionContext = motionCanvas.getContext('2d', { willReadFrequently: true });
+let previousMotionFrame = null;
+let lastHandKey = '';
+let lastHandTime = 0;
 const history = [];
 const messageEmojis = [];
 
@@ -143,6 +148,11 @@ function setActiveEmoji(key, shouldRecord = true, shouldAddToMessage = false) {
   }
 
   renderHistory();
+}
+
+function setDetectedEmoji(key, signature) {
+  setActiveEmoji(key, true);
+  showFeedback(key, signature, true);
 }
 
 function addHistory(key) {
@@ -239,12 +249,12 @@ function rememberExpression(signature, key, confirmed = false) {
   saveGlobalLearning(sample);
 }
 
-function showFeedback(key, signature) {
+function showFeedback(key, signature, force = false) {
   if (!signature || !feedbackCard) return;
   const repeatedSoon = key === lastFeedbackKey
     && Date.now() - lastFeedbackTime < 9000
     && signatureDistance(signature, lastFeedbackSignature) < 0.18;
-  if (repeatedSoon || pendingFeedback) return;
+  if (!force && (repeatedSoon || pendingFeedback)) return;
   const data = emojiMap[key] || emojiMap.neutral;
   pendingFeedback = { key, signature };
   lastFeedbackKey = key;
@@ -466,6 +476,61 @@ function expressionToEmoji(expressions) {
   return learnedEmojiFor(expressions, baseKey);
 }
 
+function detectHandMovement() {
+  if (!cameraReady || !motionContext || video.videoWidth === 0) return null;
+  const width = 96;
+  const height = 54;
+  if (motionCanvas.width !== width || motionCanvas.height !== height) {
+    motionCanvas.width = width;
+    motionCanvas.height = height;
+    previousMotionFrame = null;
+  }
+
+  motionContext.save();
+  motionContext.scale(-1, 1);
+  motionContext.drawImage(video, -width, 0, width, height);
+  motionContext.restore();
+  const frame = motionContext.getImageData(0, 0, width, height).data;
+  if (!previousMotionFrame) {
+    previousMotionFrame = new Uint8ClampedArray(frame);
+    return null;
+  }
+
+  let left = 0;
+  let center = 0;
+  let right = 0;
+  let upper = 0;
+  let lower = 0;
+  let total = 0;
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const index = (y * width + x) * 4;
+      const diff = Math.abs(frame[index] - previousMotionFrame[index])
+        + Math.abs(frame[index + 1] - previousMotionFrame[index + 1])
+        + Math.abs(frame[index + 2] - previousMotionFrame[index + 2]);
+      if (diff < 58) continue;
+      total += diff;
+      if (x < width * 0.33) left += diff;
+      else if (x > width * 0.67) right += diff;
+      else center += diff;
+      if (y < height * 0.45) upper += diff;
+      else lower += diff;
+    }
+  }
+  previousMotionFrame = new Uint8ClampedArray(frame);
+
+  const movement = total / 1000;
+  if (movement < 18 || Date.now() - lastHandTime < 2500) return null;
+  let key = '';
+  if (upper > lower * 1.45 && upper > center) key = 'cool';
+  else if (Math.abs(left - right) < center * 0.9 && movement > 30) key = 'surprised';
+  else if (left > right * 1.35 || right > left * 1.35) key = 'happy';
+  if (!key || key === lastHandKey) return null;
+  lastHandKey = key;
+  lastHandTime = Date.now();
+  return { key, signature: [0, 0, 0, 0, 0, 0, 0.5], movement };
+}
+
 function stabilizeKey(nextKey) {
   if (nextKey === stableKey) {
     stableCount += 1;
@@ -511,11 +576,17 @@ function startDetectionLoop() {
     if (!results.length) {
       renderFaceOverlays([]);
       lastDetectedFaces = [];
+      const hand = detectHandMovement();
+      if (hand) {
+        setDetectedEmoji(hand.key, hand.signature);
+        setStatus(`Hand movement detected: ${emojiMap[hand.key].label}`, false);
+        return;
+      }
       setStatus('Looking for a face...', true);
       return;
     }
 
-  const faces = results
+    const faces = results
       .slice(0, 6)
       .map((result) => ({
         box: result.detection.box,
@@ -527,8 +598,7 @@ function startDetectionLoop() {
     lastExpressionSignature = faces[0].signature;
     renderFaceOverlays(faces);
     lastDetectedFaces = faces;
-    setActiveEmoji(primaryKey, true);
-    if (stableCount >= 4) showFeedback(primaryKey, lastExpressionSignature);
+    setDetectedEmoji(primaryKey, lastExpressionSignature);
     setStatus(`${faces.length} ${faces.length === 1 ? 'face' : 'faces'} detected`, false);
   }, 220);
 }
