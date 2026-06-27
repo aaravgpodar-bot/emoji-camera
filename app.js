@@ -298,15 +298,29 @@ function expressionToEmoji(expressions) {
   const disgusted = expressions.disgusted || 0;
   const neutral = expressions.neutral || 0;
 
-  if (happy > 0.72) return 'laughing';
-  if (happy > 0.38) return 'happy';
-  if (surprised > 0.68 || fearful > 0.54) return 'shocked';
-  if (surprised > 0.34) return 'surprised';
-  if (angry > 0.32) return 'angry';
-  if (sad > 0.28) return 'sad';
-  if (disgusted > 0.25) return 'thinking';
-  if (neutral > 0.74 && score < 0.86) return 'sleepy';
-  if (score < 0.25 || top === 'neutral') return 'neutral';
+  const expressive = [
+    ['happy', happy],
+    ['surprised', surprised],
+    ['angry', angry],
+    ['sad', sad],
+    ['fearful', fearful],
+    ['disgusted', disgusted],
+  ].sort((a, b) => b[1] - a[1]);
+  const [bestExpression, bestScore] = expressive[0] || ['neutral', 0];
+  const neutralLead = neutral - bestScore;
+
+  if (happy > 0.6) return 'laughing';
+  if (happy > 0.16 && neutralLead < 0.7) return 'happy';
+  if (surprised > 0.48 || fearful > 0.42) return 'shocked';
+  if ((surprised > 0.13 || fearful > 0.18) && neutralLead < 0.72) return 'surprised';
+  if (angry > 0.13 && neutralLead < 0.72) return 'angry';
+  if (sad > 0.12 && neutralLead < 0.72) return 'sad';
+  if (disgusted > 0.12 && neutralLead < 0.72) return 'thinking';
+  if (bestScore > 0.2 && bestExpression !== 'neutral' && neutralLead < 0.76) {
+    return bestExpression === 'fearful' ? 'shocked' : bestExpression === 'disgusted' ? 'thinking' : bestExpression;
+  }
+  if (neutral > 0.62 && neutral < 0.86 && bestScore < 0.16) return 'sleepy';
+  if (score < 0.18 || top === 'neutral') return 'neutral';
   return emojiMap[top] ? top : 'neutral';
 }
 
