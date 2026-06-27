@@ -33,7 +33,6 @@ const currentLabel = document.querySelector('#currentLabel');
 const currentHint = document.querySelector('#currentHint');
 const feedbackCard = document.querySelector('#feedbackCard');
 const feedbackTitle = document.querySelector('#feedbackTitle');
-const feedbackPrompt = document.querySelector('#feedbackPrompt');
 const feedbackYesButton = document.querySelector('#feedbackYesButton');
 const feedbackNoButton = document.querySelector('#feedbackNoButton');
 const correctionForm = document.querySelector('#correctionForm');
@@ -215,8 +214,7 @@ function showFeedback(key, signature) {
   lastFeedbackTime = Date.now();
   lastFeedbackSignature = signature;
   correctionSelect.value = key;
-  feedbackTitle.textContent = `Was that ${data.emoji} ${data.label}?`;
-  feedbackPrompt.textContent = 'If it guessed wrong, choose what you meant and Emoji Camera will remember this expression.';
+  feedbackTitle.textContent = `Was ${data.emoji} ${data.label} right?`;
   correctionForm.classList.add('is-hidden');
   feedbackCard.classList.remove('is-hidden');
 }
@@ -544,7 +542,7 @@ captureButton.addEventListener('click', captureImage);
 feedbackYesButton.addEventListener('click', () => {
   if (!pendingFeedback) return;
   rememberExpression(pendingFeedback.signature, pendingFeedback.key, true);
-  showToast(`Remembered ${emojiMap[pendingFeedback.key].label}`);
+  showToast(`Confirmed ${emojiMap[pendingFeedback.key].label}`);
   hideFeedback();
 });
 
@@ -559,7 +557,7 @@ saveCorrectionButton.addEventListener('click', () => {
   const intendedKey = correctionSelect.value;
   rememberExpression(pendingFeedback.signature, intendedKey, false);
   setActiveEmoji(intendedKey, true, false);
-  showToast(`Learned ${emojiMap[intendedKey].label}`);
+  showToast(`Saved ${emojiMap[intendedKey].label} for this device`);
   hideFeedback();
 });
 

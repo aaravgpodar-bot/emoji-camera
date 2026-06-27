@@ -292,13 +292,20 @@ video.is-on {
 .current-card {
   align-items: center;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px 14px;
 }
 
 .feedback-card {
-  display: grid;
-  gap: 12px;
+  align-items: center;
+  background: rgba(255, 212, 92, 0.08);
+  border-color: rgba(255, 212, 92, 0.26);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
 }
 
 .feedback-card.is-hidden,
@@ -336,8 +343,15 @@ video.is-on {
   color: var(--muted);
 }
 
+.feedback-card p {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 850;
+  margin: 0;
+}
+
 .current-emoji {
-  font-size: 4.4rem;
+  font-size: 3.8rem;
   line-height: 1;
 }
 
