@@ -4,18 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Emoji Camera</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="app-shell">
     <section class="camera-panel" aria-label="Emoji camera">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Private browser camera</p>
-          <h1>Emoji Camera</h1>
+        <div class="masthead">
+          <p class="eyebrow"><span class="bulb"></span>Step right up &middot; runs in your browser</p>
+          <h1>Emoji&nbsp;Booth</h1>
+          <p class="tagline">Make a face. We make it a sticker.</p>
         </div>
         <div class="controls" aria-label="Camera controls">
-          <button id="startButton" class="primary">Start</button>
+          <button id="startButton" class="primary">Start camera</button>
           <button id="stopButton" class="danger" aria-label="Stop camera" disabled>Stop</button>
           <button id="captureButton" disabled>Capture</button>
         </div>
@@ -25,8 +29,9 @@
         <video id="video" autoplay muted playsinline></video>
         <canvas id="snapshotCanvas" hidden></canvas>
         <div id="cameraPlaceholder" class="camera-placeholder">
-          <span>🙂</span>
-          <strong>Camera is off</strong>
+          <span class="placeholder-face">🙂</span>
+          <strong>The booth is closed</strong>
+          <small>Hit <em>Start camera</em> and look at the lens</small>
         </div>
         <div id="overlayLayer" class="overlay-layer is-hidden" aria-hidden="true"></div>
         <section id="feedbackCard" class="feedback-card camera-feedback is-hidden" aria-live="polite">
@@ -45,7 +50,7 @@
       </div>
 
       <div class="manual-strip" aria-label="Manual emoji testing">
-        <span>Tap to add</span>
+        <span>No camera? Tap a face</span>
         <button data-manual="happy" title="Happy">😄</button>
         <button data-manual="laughing" title="Laughing">😂</button>
         <button data-manual="surprised" title="Surprised">😮</button>
@@ -62,7 +67,7 @@
     <aside class="side-panel" aria-label="Emoji tools">
       <section class="current-card">
         <div>
-          <p class="eyebrow">Current</p>
+          <p class="eyebrow">On camera now</p>
           <h2 id="currentLabel">Neutral</h2>
           <p id="currentHint">Relax your face or start the camera.</p>
         </div>
@@ -71,10 +76,10 @@
 
       <section class="composer-section">
         <div class="section-title">
-          <h2>Message</h2>
+          <h2>Your strip</h2>
           <button id="copyMessageButton" class="primary small">Copy all</button>
         </div>
-        <div id="messagePreview" class="message-preview" aria-live="polite">Build your emoji message here.</div>
+        <div id="messagePreview" class="message-preview" aria-live="polite">Build an emoji message here.</div>
         <div class="composer-actions">
           <button id="addCurrentButton">Add current</button>
           <button id="backspaceMessageButton">Backspace</button>
@@ -84,16 +89,16 @@
 
       <section class="history-section">
         <div class="section-title">
-          <h2>Recognized</h2>
+          <h2>Caught on film</h2>
           <button id="clearHistoryButton" class="ghost small">Clear</button>
         </div>
         <div id="historyList" class="history-list" aria-live="polite">
-          <p class="empty">No emojis recognized yet.</p>
+          <p class="empty">No faces caught yet &mdash; mug for the camera.</p>
         </div>
       </section>
 
       <section class="guide-section">
-        <h2>Expression Guide</h2>
+        <h2>How to pull each face</h2>
         <div id="guideList" class="guide-list"></div>
       </section>
     </aside>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "emoji-camera",
+      "runtimeExecutable": "/private/tmp/claude-501/-Users-keshavatearth-Downloads-Genwise-2026-AI-ML/742be731-6590-4962-aba1-dc89c04318e6/scratchpad/venvs/aarav-emoji/bin/python",
+      "runtimeArgs": ["server.py"],
+      "port": 7731
+    }
+  ]
+}
